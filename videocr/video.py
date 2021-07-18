@@ -1,37 +1,43 @@
 from __future__ import annotations
 from typing import List
-import sys
-import multiprocessing
-import pytesseract
 import cv2
+import numpy as np
 
-from . import constants
 from . import utils
-from .models import PredictedFrame, PredictedSubtitle
+from .models import PredictedFrames, PredictedSubtitle
 from .opencv_adapter import Capture
+from paddleocr import PaddleOCR
 
 
 class Video:
     path: str
     lang: str
     use_fullframe: bool
+    det_model_dir: str
+    rec_model_dir: str
     num_frames: int
     fps: float
     height: int
-    pred_frames: List[PredictedFrame]
+    ocr: PaddleOCR
+    pred_frames: List[PredictedFrames]
     pred_subs: List[PredictedSubtitle]
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, det_model_dir: str, rec_model_dir: str):
         self.path = path
+        self.det_model_dir = det_model_dir
+        self.rec_model_dir = rec_model_dir
         with Capture(path) as v:
             self.num_frames = int(v.get(cv2.CAP_PROP_FRAME_COUNT))
             self.fps = v.get(cv2.CAP_PROP_FPS)
             self.height = int(v.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     def run_ocr(self, lang: str, time_start: str, time_end: str,
-                conf_threshold: int, use_fullframe: bool) -> None:
+                conf_threshold: int, use_fullframe: bool, brightness_threshold: int, similar_image_threshold: int, similar_pixel_threshold: int, frames_to_skip: int) -> None:
+        conf_threshold_percent = float(conf_threshold/100)
         self.lang = lang
         self.use_fullframe = use_fullframe
+        self.pred_frames = []
+        ocr = PaddleOCR(lang=self.lang, rec_model_dir=self.rec_model_dir, det_model_dir=self.det_model_dir)
 
         ocr_start = utils.get_frame_index(time_start, self.fps) if time_start else 0
         ocr_end = utils.get_frame_index(time_end, self.fps) if time_end else self.num_frames
@@ -41,26 +47,40 @@ class Video:
         num_ocr_frames = ocr_end - ocr_start
 
         # get frames from ocr_start to ocr_end
-        with Capture(self.path) as v, multiprocessing.Pool() as pool:
+        with Capture(self.path) as v:
             v.set(cv2.CAP_PROP_POS_FRAMES, ocr_start)
-            frames = (v.read()[1] for _ in range(num_ocr_frames))
+            frames = []
+            modulo = frames_to_skip + 1
+            for i in range(num_ocr_frames):
+                if i % modulo == 0:
+                    frames.append(v.read()[1])
+                else:
+                    v.read()
 
-            # perform ocr to frames in parallel
-            it_ocr = pool.imap(self._image_to_data, frames, chunksize=10)
-            self.pred_frames = [
-                PredictedFrame(i + ocr_start, data, conf_threshold)
-                for i, data in enumerate(it_ocr)
-            ]
+            prev_grey = None
+            predicted_frames = None
+            for i, frame in enumerate(frames):
+                if not self.use_fullframe:
+                    # only use bottom third of the frame by default
+                    frame = frame[self.height // 3:, :]
 
-    def _image_to_data(self, img) -> str:
-        if not self.use_fullframe:
-            # only use bottom half of the frame by default
-            img = img[self.height // 2:, :]
-        config = '--tessdata-dir "{}"'.format(constants.TESSDATA_DIR)
-        try:
-            return pytesseract.image_to_data(img, lang=self.lang, config=config)
-        except Exception as e:
-            sys.exit('{}: {}'.format(e.__class__.__name__, e))
+                if brightness_threshold:
+                    frame = cv2.bitwise_and(frame, frame, mask=cv2.inRange(frame, (brightness_threshold, brightness_threshold, brightness_threshold), (255, 255, 255)))
+
+                if similar_image_threshold:
+                    grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    if prev_grey is not None:
+                        _, absdiff = cv2.threshold(cv2.absdiff(prev_grey, grey), similar_pixel_threshold, 255, cv2.THRESH_BINARY)
+                        if np.count_nonzero(absdiff) > similar_image_threshold:
+                            predicted_frames.end_index = i * modulo + ocr_start
+                            prev_grey = grey
+                            continue
+
+                    prev_grey = grey
+
+                predicted_frames = PredictedFrames(i * modulo + ocr_start, ocr.ocr(frame), conf_threshold_percent)
+                self.pred_frames.append(predicted_frames)
+        
 
     def get_subtitles(self, sim_threshold: int) -> str:
         self._generate_subtitles(sim_threshold)
@@ -79,33 +99,8 @@ class Video:
             raise AttributeError(
                 'Please call self.run_ocr() first to perform ocr on frames')
 
-        # divide ocr of frames into subtitle paragraphs using sliding window
-        WIN_BOUND = int(self.fps // 2)  # 1/2 sec sliding window boundary
-        bound = WIN_BOUND
-        i = 0
-        j = 1
-        while j < len(self.pred_frames):
-            fi, fj = self.pred_frames[i], self.pred_frames[j]
-
-            if fi.is_similar_to(fj):
-                bound = WIN_BOUND
-            elif bound > 0:
-                bound -= 1
-            else:
-                # divide subtitle paragraphs
-                para_new = j - WIN_BOUND
-                self._append_sub(PredictedSubtitle(
-                    self.pred_frames[i:para_new], sim_threshold))
-                i = para_new
-                j = i
-                bound = WIN_BOUND
-
-            j += 1
-
-        # also handle the last remaining frames
-        if i < len(self.pred_frames) - 1:
-            self._append_sub(PredictedSubtitle(
-                self.pred_frames[i:], sim_threshold))
+        for frame in self.pred_frames:
+            self._append_sub(PredictedSubtitle([frame], sim_threshold))
 
     def _append_sub(self, sub: PredictedSubtitle) -> None:
         if len(sub.text) == 0:

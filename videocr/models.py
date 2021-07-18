@@ -6,59 +6,56 @@ from fuzzywuzzy import fuzz
 
 @dataclass
 class PredictedWord:
-    __slots__ = 'confidence', 'text'
-    confidence: int
+    __slots__ = 'position', 'confidence', 'text'
+    position: list
+    confidence: float
     text: str
 
 
-class PredictedFrame:
-    index: int  # 0-based index of the frame
+class PredictedFrames:
+    start_index: int  # 0-based index of the frame
+    end_index: int
     words: List[PredictedWord]
-    confidence: int  # total confidence of all words
+    confidence: float  # total confidence of all words
     text: str
 
-    def __init__(self, index: int, pred_data: str, conf_threshold: int):
-        self.index = index
+    def __init__(self, index: int, pred_data: list[list], conf_threshold: float):
+        self.start_index = index
+        self.end_index = index
         self.words = []
 
-        block = 0  # keep track of line breaks
-
-        for l in pred_data.splitlines()[1:]:
-            word_data = l.split()
-            if len(word_data) < 12:
-                # no word is predicted
+        total_conf = 0
+        for l in pred_data:
+            if len(l) < 2:
                 continue
-            _, _, block_num, *_, conf, text = word_data
-            block_num, conf = int(block_num), int(conf)
-
-            # handle line breaks
-            if block < block_num:
-                block = block_num
-                if self.words and self.words[-1].text != '\n':
-                    self.words.append(PredictedWord(0, '\n'))
+            position = l[0][0]
+            text = l[1][0]
+            conf = l[1][1]
 
             # word predictions with low confidence will be filtered out
             if conf >= conf_threshold:
-                self.words.append(PredictedWord(conf, text))
+                total_conf += conf
+                self.words.append(PredictedWord(position, conf, text))
 
-        self.confidence = sum(word.confidence for word in self.words)
-
+        if self.words:
+            self.confidence = total_conf/len(self.words)
+        else:
+            self.confidence = 0
+        self.words.sort(key=lambda word: word.position[0])
         self.text = ' '.join(word.text for word in self.words)
-        # remove chars that are obviously ocr errors
-        table = str.maketrans('|', 'I', '<>{}[];`@#$%^*_=~\\')
-        self.text = self.text.translate(table).replace(' \n ', '\n').strip()
 
-    def is_similar_to(self, other: PredictedFrame, threshold=70) -> bool:
+    def is_similar_to(self, other: PredictedFrames, threshold=70) -> bool:
         return fuzz.ratio(self.text, other.text) >= threshold
 
 
 class PredictedSubtitle:
-    frames: List[PredictedFrame]
+    frames: List[PredictedFrames]
     sim_threshold: int
     text: str
 
-    def __init__(self, frames: List[PredictedFrame], sim_threshold: int):
+    def __init__(self, frames: List[PredictedFrames], sim_threshold: int):
         self.frames = [f for f in frames if f.confidence > 0]
+        self.frames.sort(key=lambda frame: frame.start_index)
         self.sim_threshold = sim_threshold
 
         if self.frames:
@@ -69,13 +66,13 @@ class PredictedSubtitle:
     @property
     def index_start(self) -> int:
         if self.frames:
-            return self.frames[0].index
+            return self.frames[0].start_index
         return 0
 
     @property
     def index_end(self) -> int:
         if self.frames:
-            return self.frames[-1].index
+            return self.frames[-1].end_index
         return 0
 
     def is_similar_to(self, other: PredictedSubtitle) -> bool:
