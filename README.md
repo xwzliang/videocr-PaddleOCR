@@ -168,3 +168,4 @@ Input Video Quality       | Use lower quality           | Use higher quality  | 
 - [ ] parallel processing
 - [ ] handle multiple lines of text in the same frame
 - [ ] publish to pypi
+- [ ] commandline interface
