@@ -86,7 +86,8 @@ To shorten the amount of time it takes to perform OCR on each frame, you can use
 -|------------|---------------|--------
 Prebuilt PaddleOCR Models | Use default 'mobile' models | Use 'server' models | Running on CPU, 'server' models take significantly more time to run.
 Input Video Quality       | Use lower quality           | Use higher quality  | Performance impact of using higher resolution video can be reduced with cropping
-`frames_to_skip` setting  | Higher number               | Lower number        |
+`frames_to_skip`          | Higher number               | Lower number        |
+`brightness_threshold`    | Higher threshold            | N/A                 | A brightness threshold can help speed up the OCR process by filtering out dark frames. In certain circumstances such as when subtitles are white and against a bright background, it may also help with accuracy.
 
 
 ## API
