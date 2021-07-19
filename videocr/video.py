@@ -49,37 +49,34 @@ class Video:
         # get frames from ocr_start to ocr_end
         with Capture(self.path) as v:
             v.set(cv2.CAP_PROP_POS_FRAMES, ocr_start)
-            frames = []
+            prev_grey = None
+            predicted_frames = None
             modulo = frames_to_skip + 1
             for i in range(num_ocr_frames):
                 if i % modulo == 0:
-                    frames.append(v.read()[1])
+                    frame = v.read()[1]
+                    if not self.use_fullframe:
+                        # only use bottom third of the frame by default
+                        frame = frame[self.height // 3:, :]
+
+                    if brightness_threshold:
+                        frame = cv2.bitwise_and(frame, frame, mask=cv2.inRange(frame, (brightness_threshold, brightness_threshold, brightness_threshold), (255, 255, 255)))
+
+                    if similar_image_threshold:
+                        grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                        if prev_grey is not None:
+                            _, absdiff = cv2.threshold(cv2.absdiff(prev_grey, grey), similar_pixel_threshold, 255, cv2.THRESH_BINARY)
+                            if np.count_nonzero(absdiff) > similar_image_threshold:
+                                predicted_frames.end_index = i + ocr_start
+                                prev_grey = grey
+                                continue
+
+                        prev_grey = grey
+
+                    predicted_frames = PredictedFrames(i + ocr_start, ocr.ocr(frame), conf_threshold_percent)
+                    self.pred_frames.append(predicted_frames)
                 else:
                     v.read()
-
-            prev_grey = None
-            predicted_frames = None
-            for i, frame in enumerate(frames):
-                if not self.use_fullframe:
-                    # only use bottom third of the frame by default
-                    frame = frame[self.height // 3:, :]
-
-                if brightness_threshold:
-                    frame = cv2.bitwise_and(frame, frame, mask=cv2.inRange(frame, (brightness_threshold, brightness_threshold, brightness_threshold), (255, 255, 255)))
-
-                if similar_image_threshold:
-                    grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    if prev_grey is not None:
-                        _, absdiff = cv2.threshold(cv2.absdiff(prev_grey, grey), similar_pixel_threshold, 255, cv2.THRESH_BINARY)
-                        if np.count_nonzero(absdiff) > similar_image_threshold:
-                            predicted_frames.end_index = i * modulo + ocr_start
-                            prev_grey = grey
-                            continue
-
-                    prev_grey = grey
-
-                predicted_frames = PredictedFrames(i * modulo + ocr_start, ocr.ocr(frame), conf_threshold_percent)
-                self.pred_frames.append(predicted_frames)
         
 
     def get_subtitles(self, sim_threshold: int) -> str:
