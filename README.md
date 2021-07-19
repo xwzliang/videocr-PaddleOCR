@@ -69,7 +69,7 @@ example.srt:
 
 ## Installation
 
-1. Clone this repo
+1. Clone or download and extract this repo
 2. From the root directory of this repository run `python -m pip install -e .`
 
 ## Performance
