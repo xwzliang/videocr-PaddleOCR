@@ -64,7 +64,7 @@ class Video:
                     frame = v.read()[1]
                     if not self.use_fullframe:
                         if crop_x_end and crop_y_end:
-                            frame = frame[crop_x:crop_x_end, crop_y:crop_y_end]
+                            frame = frame[crop_y:crop_y_end, crop_x:crop_x_end]
                         else:
                             # only use bottom third of the frame by default
                             frame = frame[self.height // 3:, :]
