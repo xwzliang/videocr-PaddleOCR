@@ -32,7 +32,8 @@ class Video:
             self.height = int(v.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     def run_ocr(self, lang: str, time_start: str, time_end: str,
-                conf_threshold: int, use_fullframe: bool, brightness_threshold: int, similar_image_threshold: int, similar_pixel_threshold: int, frames_to_skip: int) -> None:
+                conf_threshold: int, use_fullframe: bool, brightness_threshold: int, similar_image_threshold: int, similar_pixel_threshold: int, frames_to_skip: int,
+                crop_x: int, crop_y: int, crop_width: int, crop_height: int) -> None:
         conf_threshold_percent = float(conf_threshold/100)
         self.lang = lang
         self.use_fullframe = use_fullframe
@@ -46,6 +47,12 @@ class Video:
             raise ValueError('time_start is later than time_end')
         num_ocr_frames = ocr_end - ocr_start
 
+        crop_x_end = None
+        crop_y_end = None
+        if crop_x and crop_y and crop_width and crop_height:
+            crop_x_end = crop_x + crop_width
+            crop_y_end = crop_y + crop_height
+
         # get frames from ocr_start to ocr_end
         with Capture(self.path) as v:
             v.set(cv2.CAP_PROP_POS_FRAMES, ocr_start)
@@ -56,8 +63,11 @@ class Video:
                 if i % modulo == 0:
                     frame = v.read()[1]
                     if not self.use_fullframe:
-                        # only use bottom third of the frame by default
-                        frame = frame[self.height // 3:, :]
+                        if crop_x_end and crop_y_end:
+                            frame = frame[crop_x:crop_x_end, crop_y:crop_y_end]
+                        else:
+                            # only use bottom third of the frame by default
+                            frame = frame[self.height // 3:, :]
 
                     if brightness_threshold:
                         frame = cv2.bitwise_and(frame, frame, mask=cv2.inRange(frame, (brightness_threshold, brightness_threshold, brightness_threshold), (255, 255, 255)))

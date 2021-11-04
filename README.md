@@ -98,7 +98,8 @@ Input Video Quality       | Use lower quality           | Use higher quality  | 
         video_path: str, lang='ch', time_start='0:00', time_end='',
         conf_threshold=75, sim_threshold=80, use_fullframe=False,
         det_model_dir=None, rec_model_dir=None,
-        brightness_threshold=None, similar_image_threshold=100, similar_pixel_threshold=25, frames_to_skip=1)
+        brightness_threshold=None, similar_image_threshold=100, similar_pixel_threshold=25, frames_to_skip=1,
+        crop_x=None, crop_y=None, crop_width=None, crop_height=None)
     ```
 
 2. Write subtitles to `file_path`
@@ -107,7 +108,8 @@ Input Video Quality       | Use lower quality           | Use higher quality  | 
         video_path: str, file_path='subtitle.srt', lang='ch', time_start='0:00', time_end='', 
         conf_threshold=75, sim_threshold=80, use_fullframe=False,
         det_model_dir=None, rec_model_dir=None,
-        brightness_threshold=None, similar_image_threshold=100, similar_pixel_threshold=25, frames_to_skip=1)
+        brightness_threshold=None, similar_image_threshold=100, similar_pixel_threshold=25, frames_to_skip=1,
+        crop_x=None, crop_y=None, crop_width=None, crop_height=None)
     ```
 
 ### Parameters
@@ -134,7 +136,11 @@ Input Video Quality       | Use lower quality           | Use higher quality  | 
 
 - `use_fullframe`
 
-  By default, only the bottom third of each frame is used for OCR. You can explicitly use the full frame if your subtitles are not within the bottom third of each frame.
+  By default, the specified cropped area is used for OCR or if a crop is not specified, then the bottom third of the frame will be used. By setting this value to `True` the entire frame will be used.
+
+- `crop_x`, `crop_y`, `crop_width`, `crop_height`
+
+  Specifies the bounding area in pixels for the portion of the frame that will be used for OCR.
 
 - `det_model_dir`
 
