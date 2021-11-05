@@ -60,17 +60,13 @@ example.srt:
 ```
 
 ## Install prerequisites
-
-1. Python 3.7
-2. PaddleOCR
-   - 2.0+ (Recommended): download the latest release from https://github.com/PaddlePaddle/PaddleOCR/releases, unzip and run `python -m pip install -e .` from the root project directory (pip does not appear to have latest version at the moment)
-   - or 1.1: `python -m pip install paddleocr==1.1.1`
-3. PaddlePaddle - `python -m pip install paddlepaddle` or if you want to run OCR with a CUDA 9 or CUDA 10 GPU use `python -m pip install paddlepaddle-gpu`
+Python 3.7+
 
 ## Installation
 
 1. Clone or download and extract this repo
-2. From the root directory of this repository run `python -m pip install -e .`
+2. From the root directory of this repository run `python -m pip install .`
+3. If using GPU, install paddlepaddle-gpu: `python -m pip install paddlepaddle-gpu`
 
 ## Performance
 
@@ -97,7 +93,7 @@ Input Video Quality       | Use lower quality           | Use higher quality  | 
     get_subtitles(
         video_path: str, lang='ch', time_start='0:00', time_end='',
         conf_threshold=75, sim_threshold=80, use_fullframe=False,
-        det_model_dir=None, rec_model_dir=None,
+        det_model_dir=None, rec_model_dir=None, use_gpu=False,
         brightness_threshold=None, similar_image_threshold=100, similar_pixel_threshold=25, frames_to_skip=1,
         crop_x=None, crop_y=None, crop_width=None, crop_height=None)
     ```
@@ -107,7 +103,7 @@ Input Video Quality       | Use lower quality           | Use higher quality  | 
     save_subtitles_to_file(
         video_path: str, file_path='subtitle.srt', lang='ch', time_start='0:00', time_end='', 
         conf_threshold=75, sim_threshold=80, use_fullframe=False,
-        det_model_dir=None, rec_model_dir=None,
+        det_model_dir=None, rec_model_dir=None, use_gpu=False,
         brightness_threshold=None, similar_image_threshold=100, similar_pixel_threshold=25, frames_to_skip=1,
         crop_x=None, crop_y=None, crop_width=None, crop_height=None)
     ```
@@ -146,13 +142,17 @@ Input Video Quality       | Use lower quality           | Use higher quality  | 
 
   the text detection inference model folder. There are two ways to transfer parameters, 1. None: Automatically download the built-in model to ~/.paddleocr/det; 2. The path of a specific inference model, the model and params files must be included in the model path.
   
-  Prebuilt detection models (including bigger/slower ones with better accuracy than the default mobile models) can be found here: https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.1/doc/doc_en/models_list_en.md#1-text-detection-model.
+  Prebuilt detection models (including bigger/slower ones with better accuracy than the default mobile models) can be found here: https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.3/doc/doc_en/models_list_en.md#1-text-detection-model.
 
 - `rec_model_dir`
   
   the text recognition inference model folder. There are two ways to transfer parameters, 1. None: Automatically download the built-in model to ~/.paddleocr/rec; 2. The path of a specific inference model, the model and params files must be included in the model path.
   
-  Prebuilt recognition models (including bigger/slower ones with better accuracy than the default mobile models) can be found here: https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.1/doc/doc_en/models_list_en.md#2-text-recognition-model.
+  Prebuilt recognition models (including bigger/slower ones with better accuracy than the default mobile models) can be found here: hhttps://github.com/PaddlePaddle/PaddleOCR/blob/release/2.3/doc/doc_en/models_list_en.md#2-text-recognition-model.
+
+- `use_gpu`
+
+  Set to `True` if performing ocr with gpu (requires the `paddlepaddle-gpu` python package to be installed)
 
 - `brightness_threshold`
   
@@ -175,3 +175,4 @@ Input Video Quality       | Use lower quality           | Use higher quality  | 
 - [ ] handle multiple lines of text in the same frame
 - [ ] publish to pypi
 - [ ] commandline interface
+- [ ] user-friendly application for non-devs
