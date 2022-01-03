@@ -3,11 +3,10 @@ from typing import List
 from dataclasses import dataclass
 from fuzzywuzzy import fuzz
 
-
 @dataclass
-class PredictedWord:
-    __slots__ = 'position', 'confidence', 'text'
-    position: list
+class PredictedText:
+    __slots__ = 'bounding_box', 'confidence', 'text'
+    bounding_box: list
     confidence: float
     text: str
 
@@ -15,7 +14,7 @@ class PredictedWord:
 class PredictedFrames:
     start_index: int  # 0-based index of the frame
     end_index: int
-    words: List[PredictedWord]
+    words: List[PredictedText]
     confidence: float  # total confidence of all words
     text: str
 
@@ -28,20 +27,22 @@ class PredictedFrames:
         for l in pred_data:
             if len(l) < 2:
                 continue
-            position = l[0][0]
+            bounding_box = l[0]
             text = l[1][0]
             conf = l[1][1]
 
             # word predictions with low confidence will be filtered out
             if conf >= conf_threshold:
                 total_conf += conf
-                self.words.append(PredictedWord(position, conf, text))
+                self.words.append(PredictedText(bounding_box, conf, text))
 
         if self.words:
             self.confidence = total_conf/len(self.words)
+            self.words.sort(key=lambda word: word.bounding_box[0][0])
+        elif len(pred_data) == 0:
+            self.confidence = 100
         else:
             self.confidence = 0
-        self.words.sort(key=lambda word: word.position[0])
         self.text = ' '.join(word.text for word in self.words)
 
     def is_similar_to(self, other: PredictedFrames, threshold=70) -> bool:
