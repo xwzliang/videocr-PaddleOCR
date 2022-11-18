@@ -84,7 +84,6 @@ To shorten the amount of time it takes to perform OCR on each frame, you can use
 
 || More Speed | More Accuracy | Notes
 -|------------|---------------|--------
-Prebuilt PaddleOCR Models | Use default 'mobile' models | Use 'server' models | Running on CPU, 'server' models take significantly more time to run.
 Input Video Quality       | Use lower quality           | Use higher quality  | Performance impact of using higher resolution video can be reduced with cropping
 `frames_to_skip`          | Higher number               | Lower number        |
 `brightness_threshold`    | Higher threshold            | N/A                 | A brightness threshold can help speed up the OCR process by filtering out dark frames. In certain circumstances such as when subtitles are white and against a bright background, it may also help with accuracy.
@@ -146,13 +145,13 @@ Input Video Quality       | Use lower quality           | Use higher quality  | 
 
   the text detection inference model folder. There are two ways to transfer parameters, 1. None: Automatically download the built-in model to ~/.paddleocr/det; 2. The path of a specific inference model, the model and params files must be included in the model path.
   
-  Prebuilt detection models (including bigger/slower ones with better accuracy than the default mobile models) can be found here: https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.3/doc/doc_en/models_list_en.md#1-text-detection-model.
+  See PaddleOCR repo for list of prebuilt models: https://github.com/PaddlePaddle/PaddleOCR/.
 
 - `rec_model_dir`
   
   the text recognition inference model folder. There are two ways to transfer parameters, 1. None: Automatically download the built-in model to ~/.paddleocr/rec; 2. The path of a specific inference model, the model and params files must be included in the model path.
   
-  Prebuilt recognition models (including bigger/slower ones with better accuracy than the default mobile models) can be found here: hhttps://github.com/PaddlePaddle/PaddleOCR/blob/release/2.3/doc/doc_en/models_list_en.md#2-text-recognition-model.
+  See PaddleOCR repo for list of prebuilt models: https://github.com/PaddlePaddle/PaddleOCR/.
 
 - `use_gpu`
 
