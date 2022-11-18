@@ -69,7 +69,7 @@ paddlepaddle or paddlepaddle-gpu See https://www.paddlepaddle.org.cn/install/qui
 `pip install git+https://github.com/oliverfei/videocr-PaddleOCR.git`
 
 Alternatively for development:
-1. Clone or this repo
+1. Clone this repo
 2. From the root directory of this repository run `python -m pip install .`
 
 ## Performance
