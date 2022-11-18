@@ -24,17 +24,12 @@ class PredictedFrames:
         self.words = []
 
         total_conf = 0
-        print(len(pred_data))
-        print(pred_data)
         for l in pred_data[0]:
             if len(l) < 2:
                 continue
             bounding_box = l[0]
             text = l[1][0]
             conf = l[1][1]
-
-            print(text)
-            print(conf)
 
             # word predictions with low confidence will be filtered out
             if conf >= conf_threshold:
