@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import List
 from dataclasses import dataclass
-from fuzzywuzzy import fuzz
+from thefuzz import fuzz
 
 @dataclass
 class PredictedText:
@@ -24,12 +24,17 @@ class PredictedFrames:
         self.words = []
 
         total_conf = 0
-        for l in pred_data:
+        print(len(pred_data))
+        print(pred_data)
+        for l in pred_data[0]:
             if len(l) < 2:
                 continue
             bounding_box = l[0]
             text = l[1][0]
             conf = l[1][1]
+
+            print(text)
+            print(conf)
 
             # word predictions with low confidence will be filtered out
             if conf >= conf_threshold:
@@ -39,7 +44,7 @@ class PredictedFrames:
         if self.words:
             self.confidence = total_conf/len(self.words)
             self.words.sort(key=lambda word: word.bounding_box[0][0])
-        elif len(pred_data) == 0:
+        elif len(pred_data[0]) == 0:
             self.confidence = 100
         else:
             self.confidence = 0

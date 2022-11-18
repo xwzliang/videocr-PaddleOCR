@@ -62,11 +62,15 @@ example.srt:
 ## Install prerequisites
 Python 3.7 or 3.8
 
+paddlepaddle or paddlepaddle-gpu See https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/en/install/pip/linux-pip_en.html
+
 ## Installation
 
-1. Clone or download and extract this repo
+`pip install git+https://github.com/oliverfei/videocr-PaddleOCR.git`
+
+Alternatively for development:
+1. Clone or this repo
 2. From the root directory of this repository run `python -m pip install .`
-3. If using GPU, install paddlepaddle-gpu: `python -m pip install paddlepaddle-gpu`
 
 ## Performance
 
@@ -74,7 +78,7 @@ The OCR process can be very slow on CPU. Running with `paddlepaddle-gpu` is reco
 
 ## Tips
 
-To shorten the amount of time it takes to perform OCR on each frame, you can use a tool such as [ffmpeg](https://ffmpeg.org/) to crop out only the areas of the videos where the subtitles appear. When cropping, leave a bit of buffer space above and below the text to ensure accurate readings.
+To shorten the amount of time it takes to perform OCR on each frame, you can use the `crop_x`, `crop_y`, `crop_width`, `crop_height` params to crop out only the areas of the videos where the subtitles appear. When cropping, leave a bit of buffer space above and below the text to ensure accurate readings.
 
 ### Quick Configuration Cheatsheet
 
