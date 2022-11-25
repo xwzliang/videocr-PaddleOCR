@@ -21,9 +21,12 @@ class PredictedFrames:
     def __init__(self, index: int, pred_data: list[list], conf_threshold: float):
         self.start_index = index
         self.end_index = index
-        self.words = []
+        self.lines = []
 
         total_conf = 0
+        word_count = 0
+        current_line = []
+        current_line_max_y = None
         for l in pred_data[0]:
             if len(l) < 2:
                 continue
@@ -34,16 +37,37 @@ class PredictedFrames:
             # word predictions with low confidence will be filtered out
             if conf >= conf_threshold:
                 total_conf += conf
-                self.words.append(PredictedText(bounding_box, conf, text))
+                word_count += 1
 
-        if self.words:
-            self.confidence = total_conf/len(self.words)
-            self.words.sort(key=lambda word: word.bounding_box[0][0])
+                # add word to current line or create a new line
+                max_y = max(bounding_box[0][1], bounding_box[1][1], bounding_box[2][1], bounding_box[3][1])
+
+                if current_line_max_y is None:
+                    current_line_max_y = max_y
+                    current_line.append(PredictedText(bounding_box, conf, text))
+                else:
+                    min_y = min(bounding_box[0][1], bounding_box[1][1], bounding_box[2][1], bounding_box[3][1])
+                    height = max_y - min_y
+                    height_overlap_allowance = height * 0.1
+                    if min_y >= current_line_max_y - height_overlap_allowance: # new line
+                        self.lines.append(current_line)
+                        current_line = [PredictedText(bounding_box, conf, text)]
+                        current_line_max_y = max_y
+                    else:
+                        current_line.append(PredictedText(bounding_box, conf, text))
+                        current_line_max_y = max(current_line_max_y, max_y)
+
+        if len(current_line) > 0:
+            self.lines.append(current_line)
+        if self.lines:
+            self.confidence = total_conf/word_count
+            for line in self.lines:
+                line.sort(key=lambda word: word.bounding_box[0][0])
         elif len(pred_data[0]) == 0:
             self.confidence = 100
         else:
             self.confidence = 0
-        self.text = ' '.join(word.text for word in self.words)
+        self.text = '\n'.join(' '.join(word.text for word in line) for line in self.lines)
 
     def is_similar_to(self, other: PredictedFrames, threshold=70) -> bool:
         return fuzz.partial_ratio(self.text, other.text) >= threshold
