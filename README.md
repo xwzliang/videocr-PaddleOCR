@@ -1,6 +1,7 @@
 # videocr
 
 Extract hardcoded (burned-in) subtitles from videos using the [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) OCR engine with Python.
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/oliverfei/videocr-PaddleOCR/blob/master/videocr_PaddleOCR.ipynb)
 
 ```python
 # example.py
