@@ -140,7 +140,8 @@ Input Video Quality       | Use lower quality           | Use higher quality  | 
 
 - `crop_x`, `crop_y`, `crop_width`, `crop_height`
 
-  Specifies the bounding area in pixels for the portion of the frame that will be used for OCR.
+  Specifies the bounding area in pixels for the portion of the frame that will be used for OCR. See image below for example:
+  ![image](https://user-images.githubusercontent.com/8058852/226201081-f4ec9a23-4cc8-48d4-b15c-6ea2ac29ae93.png)
 
 - `det_model_dir`
 
