@@ -116,7 +116,7 @@ Input Video Quality       | Use lower quality           | Use higher quality  | 
 
 - `lang`
 
-  The language of the subtitles. 
+  The language of the subtitles. See [PaddleOCR docs](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_en/multi_languages_en.md#5-support-languages-and-abbreviations) for list of supported languages and their abbreviations
 
 - `conf_threshold`
 
