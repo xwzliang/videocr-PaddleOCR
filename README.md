@@ -75,7 +75,7 @@ Alternatively for development:
 
 ## Performance
 
-The OCR process can be very slow on CPU. Running with `paddlepaddle-gpu` is recommended if you have a CUDA 9 or CUDA 10 GPU.
+The OCR process can be very slow on CPU. Running with `paddlepaddle-gpu` is recommended if you have a CUDA GPU.
 
 ## Tips
 
