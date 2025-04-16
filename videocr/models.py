@@ -19,6 +19,10 @@ class PredictedFrames:
     text: str
 
     def __init__(self, index: int, pred_data: list[list], conf_threshold: float):
+        # Fix for PaddleOCR versions greater than 2.7.0.2
+        if not pred_data or pred_data[0] is None:
+            pred_data = [[]]
+
         self.start_index = index
         self.end_index = index
         self.lines = []
