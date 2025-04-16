@@ -67,7 +67,7 @@ class Video:
                             frame = frame[crop_y:crop_y_end, crop_x:crop_x_end]
                         else:
                             # only use bottom third of the frame by default
-                            frame = frame[self.height // 3:, :]
+                            frame = frame[2 * self.height // 3:, :]
 
                     if brightness_threshold:
                         frame = cv2.bitwise_and(frame, frame, mask=cv2.inRange(frame, (brightness_threshold, brightness_threshold, brightness_threshold), (255, 255, 255)))
