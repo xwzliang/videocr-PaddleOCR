@@ -36,6 +36,10 @@ class Video:
         self.container.seek(0, any_frame=False, stream=self.stream)
 
         self.pred_frames: List[PredictedFrames] = []
+        with Capture(path) as v:
+            self.num_frames = int(v.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.fps = v.get(cv2.CAP_PROP_FPS)
+            self.height = int(v.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     def _timecode_to_ms(self, tc: str) -> int:
         parts = list(map(float, tc.split(":")))
@@ -176,58 +180,67 @@ class Video:
 
     def get_subtitles(self, sim_threshold: int = 80) -> str:
         """
-        Build SRT entries by:
-         1) Extracting text from PredictedText objects.
-         2) Merging hits that are similar and close in time.
+        Emit SRT cues by:
+        • grouping same-text hits,
+        • ending each cue at the next hit’s timestamp minus 1ms,
+        • and for the last cue, adding one frame’s interval.
         """
-        # 1) collect (timestamp, text) hits
+        # 1) collect raw hits
         hits: List[tuple[float, str]] = []
         for pf in self.pred_frames:
-            if not getattr(pf, "lines", None):
+            if not pf.lines:
                 continue
-
-            # extract each PredictedText.text
-            pieces = []
-            for line in pf.lines:
-                for pt in line:
-                    # PredictedText has attribute .text
-                    pieces.append(pt.text if hasattr(pt, "text") else str(pt))
+            # flatten nested PredictedText lists
+            pieces = [pt.text for line in pf.lines for pt in line]
             text = " ".join(pieces)
             hits.append((pf.timestamp_ms, text))
 
         if not hits:
             return ""
 
-        # 2) fuzzy-merge into SRT cues
-        srt_entries = []
+        # Precompute one frame interval in ms
+        frame_interval_ms = 1000.0 / self.fps
+
+        merge_gap = 3000.0  # max gap to still consider “same” run
+        srt = []
         idx = 1
-        start_ts, last_ts, last_txt = hits[0][0], hits[0][0], hits[0][1]
-        merge_gap = 3000.0  # 3 seconds max gap
+        i = 0
+        n = len(hits)
 
-        for ts, txt in hits[1:]:
-            gap = ts - last_ts
-            sim = fuzz.ratio(last_txt, txt)
-            if sim >= sim_threshold and gap <= merge_gap:
-                # extend current cue
-                last_ts = ts
+        while i < n:
+            start_ts, txt = hits[i]
+            j = i + 1
+
+            # extend run while text is similar and gap small
+            while j < n:
+                ts_j, txt_j = hits[j]
+                ts_prev, _ = hits[j - 1]
+                if (
+                    fuzz.ratio(txt, txt_j) >= sim_threshold
+                    and (ts_j - ts_prev) <= merge_gap
+                ):
+                    j += 1
+                else:
+                    break
+
+            # determine end timestamp:
+            if j < n:
+                # there is a next, so end just before it
+                end_ts = hits[j][0] - 1
             else:
-                # close out previous cue
-                srt_entries.append(
-                    f"{idx}\n"
-                    f"{self._fmt(start_ts)} --> {self._fmt(last_ts+1)}\n"
-                    f"{last_txt}\n"
-                )
-                idx += 1
-                start_ts, last_ts, last_txt = ts, ts, txt
+                # last group → add one frame interval
+                end_ts = hits[-1][0] + frame_interval_ms
 
-        # final cue
-        srt_entries.append(
-            f"{idx}\n"
-            f"{self._fmt(start_ts)} --> {self._fmt(last_ts+1)}\n"
-            f"{last_txt}\n"
-        )
+            # format cue
+            srt.append(
+                f"{idx}\n"
+                f"{self._fmt(start_ts)} --> {self._fmt(end_ts)}\n"
+                f"{txt}\n\n"
+            )
+            idx += 1
+            i = j
 
-        return "\n".join(srt_entries)
+        return "".join(srt)
 
     @staticmethod
     def _fmt(ms: float) -> str:
