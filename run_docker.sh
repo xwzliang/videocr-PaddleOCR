@@ -1,0 +1,1 @@
+docker run --gpus all -v ~/videos:/data -v ./:/workspace:delegated -v ~/models/.cache/huggingface:/root/.cache/huggingface:rshared -v ~/models/.paddlex/:/root/.paddlex:rshared --name videocr xwzliang/videocr_paddle:0.0.1

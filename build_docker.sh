@@ -1,0 +1,1 @@
+docker build -t xwzliang/videocr_paddle:0.0.2 .

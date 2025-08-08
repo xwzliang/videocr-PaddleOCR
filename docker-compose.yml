@@ -1,0 +1,35 @@
+version: "3.9"
+services:
+  videocr:
+    image: xwzliang/videocr_paddle:0.0.2
+    # user: "broliang"
+    container_name: videocr
+    networks:
+      - mynet
+    restart: always
+    build: .
+    # For Nvidia GPU's - You probably want to uncomment this
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    devices:
+      - "/dev/dri:/dev/dri"
+    # environment:
+    #   - LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:${LD_LIBRARY_PATH}
+    volumes:
+      - ./:/workspace:delegated
+      - ~/videos:/data
+      - /mnt/omv:/Volumes/omv
+      - ~/models/.cache/huggingface:/root/.cache/huggingface:rshared
+      - ~/models/.paddlex/:/root/.paddlex:rshared
+    ports:
+      - "8006:8000"
+    command: uvicorn server:app --host 0.0.0.0 --port 8000  --reload
+
+networks:
+  mynet:
+    external: true
