@@ -32,10 +32,24 @@ class Video:
             self.fps = v.get(cv2.CAP_PROP_FPS)
             self.height = int(v.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    def run_ocr(self, use_gpu: bool, lang: str, time_start: str, time_end: str,
-                conf_threshold: int, use_fullframe: bool, brightness_threshold: int, similar_image_threshold: int, similar_pixel_threshold: int, frames_to_skip: int,
-                crop_x: int, crop_y: int, crop_width: int, crop_height: int) -> None:
-        conf_threshold_percent = float(conf_threshold/100)
+    def run_ocr(
+        self,
+        use_gpu: bool,
+        lang: str,
+        time_start: str,
+        time_end: str,
+        conf_threshold: int,
+        use_fullframe: bool,
+        brightness_threshold: int,
+        similar_image_threshold: int,
+        similar_pixel_threshold: int,
+        frames_to_skip: int,
+        crop_x: int,
+        crop_y: int,
+        crop_width: int,
+        crop_height: int,
+    ) -> None:
+        conf_threshold_percent = float(conf_threshold / 100)
         self.lang = lang
         self.use_fullframe = use_fullframe
         self.pred_frames = []
@@ -46,26 +60,32 @@ class Video:
                 lang=self.lang,
                 text_recognition_model_dir=self.rec_model_dir,
                 text_detection_model_dir=self.det_model_dir,
-                text_detection_model_name=utils.get_model_name_from_dir(self.det_model_dir),
-                text_recognition_model_name=utils.get_model_name_from_dir(self.rec_model_dir),
+                text_detection_model_name=utils.get_model_name_from_dir(
+                    self.det_model_dir
+                ),
+                text_recognition_model_name=utils.get_model_name_from_dir(
+                    self.rec_model_dir
+                ),
                 use_doc_orientation_classify=False,
                 use_doc_unwarping=False,
                 use_textline_orientation=False,
-                device="gpu" if use_gpu else "cpu"
+                device="gpu" if use_gpu else "cpu",
             )
         else:
             ocr = PaddleOCR(
                 lang=self.lang,
                 rec_model_dir=self.rec_model_dir,
                 det_model_dir=self.det_model_dir,
-                use_gpu=use_gpu
+                use_gpu=use_gpu,
             )
 
         ocr_start = utils.get_frame_index(time_start, self.fps) if time_start else 0
-        ocr_end = utils.get_frame_index(time_end, self.fps) if time_end else self.num_frames
+        ocr_end = (
+            utils.get_frame_index(time_end, self.fps) if time_end else self.num_frames
+        )
 
         if ocr_end < ocr_start:
-            raise ValueError('time_start is later than time_end')
+            raise ValueError("time_start is later than time_end")
         num_ocr_frames = ocr_end - ocr_start
 
         crop_x_end = None
@@ -90,15 +110,32 @@ class Video:
                             frame = frame[crop_y:crop_y_end, crop_x:crop_x_end]
                         else:
                             # only use bottom third of the frame by default
-                            frame = frame[2 * self.height // 3:, :]
+                            frame = frame[2 * self.height // 3 :, :]
 
                     if brightness_threshold:
-                        frame = cv2.bitwise_and(frame, frame, mask=cv2.inRange(frame, (brightness_threshold, brightness_threshold, brightness_threshold), (255, 255, 255)))
+                        frame = cv2.bitwise_and(
+                            frame,
+                            frame,
+                            mask=cv2.inRange(
+                                frame,
+                                (
+                                    brightness_threshold,
+                                    brightness_threshold,
+                                    brightness_threshold,
+                                ),
+                                (255, 255, 255),
+                            ),
+                        )
 
                     if similar_image_threshold:
                         grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                         if prev_grey is not None:
-                            _, absdiff = cv2.threshold(cv2.absdiff(prev_grey, grey), similar_pixel_threshold, 255, cv2.THRESH_BINARY)
+                            _, absdiff = cv2.threshold(
+                                cv2.absdiff(prev_grey, grey),
+                                similar_pixel_threshold,
+                                255,
+                                cv2.THRESH_BINARY,
+                            )
                             if np.count_nonzero(absdiff) < similar_image_threshold:
                                 predicted_frames.end_index = i + ocr_start
                                 prev_grey = grey
@@ -106,32 +143,38 @@ class Video:
 
                         prev_grey = grey
 
-                    predicted_frames = PredictedFrames(i + ocr_start, ocr.ocr(frame), conf_threshold_percent)
+                    predicted_frames = PredictedFrames(
+                        i + ocr_start, ocr.ocr(frame), conf_threshold_percent
+                    )
                     self.pred_frames.append(predicted_frames)
                 else:
                     v.read()
-        
 
     def get_subtitles(self, sim_threshold: int) -> str:
         self._generate_subtitles(sim_threshold)
-        return ''.join(
-            '{}\n{} --> {}\n{}\n\n'.format(
+        return "".join(
+            "{}\n{} --> {}\n{}\n\n".format(
                 i,
                 utils.get_srt_timestamp(sub.index_start, self.fps),
                 utils.get_srt_timestamp(sub.index_end + 1, self.fps),
-                sub.text)
-            for i, sub in enumerate(self.pred_subs, start=1))
+                sub.text,
+            )
+            for i, sub in enumerate(self.pred_subs, start=1)
+        )
 
     def _generate_subtitles(self, sim_threshold: int) -> None:
         self.pred_subs = []
 
         if self.pred_frames is None:
             raise AttributeError(
-                'Please call self.run_ocr() first to perform ocr on frames')
+                "Please call self.run_ocr() first to perform ocr on frames"
+            )
 
         max_frame_merge_diff = int(0.09 * self.fps)
         for frame in self.pred_frames:
-            self._append_sub(PredictedSubtitle([frame], sim_threshold), max_frame_merge_diff)
+            self._append_sub(
+                PredictedSubtitle([frame], sim_threshold), max_frame_merge_diff
+            )
         self.pred_subs = [sub for sub in self.pred_subs if len(sub.frames[0].lines) > 0]
 
     def _append_sub(self, sub: PredictedSubtitle, max_frame_merge_diff: int) -> None:
@@ -141,7 +184,11 @@ class Video:
         # merge new sub to the last subs if they are not empty, similar and within 0.09 seconds apart
         if self.pred_subs:
             last_sub = self.pred_subs[-1]
-            if len(last_sub.frames[0].lines) > 0 and sub.index_start - last_sub.index_end <= max_frame_merge_diff and last_sub.is_similar_to(sub):
+            if (
+                len(last_sub.frames[0].lines) > 0
+                and sub.index_start - last_sub.index_end <= max_frame_merge_diff
+                and last_sub.is_similar_to(sub)
+            ):
                 del self.pred_subs[-1]
                 sub = PredictedSubtitle(last_sub.frames + sub.frames, sub.sim_threshold)
 
