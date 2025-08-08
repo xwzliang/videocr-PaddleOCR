@@ -64,8 +64,11 @@ class Video:
         crop_y: Optional[int],
         crop_width: Optional[int],
         crop_height: Optional[int],
+        percent_crop_left: Optional[float] = None,
+        percent_crop_right: Optional[float] = None,
+        percent_keep_bottom: Optional[float] = None,
     ) -> None:
-        # init OCR
+        # Initialize PaddleOCR
         if utils.needs_conversion():
             self.ocr = PaddleOCR(
                 lang=lang,
@@ -94,7 +97,7 @@ class Video:
         end_ms = self._timecode_to_ms(time_end) if time_end else None
         conf_pct = conf_threshold / 100.0
 
-        # seek by PTS
+        # Seek to start timestamp
         if start_ms:
             ts = int((start_ms / 1000) / float(self.stream.time_base))
             self.container.seek(ts, any_frame=False, stream=self.stream)
@@ -104,6 +107,7 @@ class Video:
         frame_ct = 0
         self.pred_frames.clear()
 
+        # Decode frames and run OCR
         for packet in self.container.demux(self.stream):
             for frame in packet.decode():
                 pts_ms = float(frame.pts * self.stream.time_base) * 1000
@@ -117,23 +121,42 @@ class Video:
                     continue
 
                 img = frame.to_ndarray(format="bgr24")
+                h, w = img.shape[:2]
 
-                # crop
+                # Crop based on percentages or absolute values
                 if not use_fullframe:
-                    if None not in (crop_x, crop_y, crop_width, crop_height):
+                    if (
+                        percent_crop_left is not None
+                        or percent_crop_right is not None
+                        or percent_keep_bottom is not None
+                    ):
+                        # compute pixel coords from percentages
+                        left_px = int(w * (percent_crop_left or 0))
+                        right_px = int(w * (percent_crop_right or 0))
+                        bottom_h = int(
+                            h
+                            * (
+                                percent_keep_bottom
+                                if percent_keep_bottom is not None
+                                else 1
+                            )
+                        )
+                        # crop: keep bottom portion horizontally between left and right
+                        img = img[h - bottom_h : h, left_px : w - right_px]
+                    elif None not in (crop_x, crop_y, crop_width, crop_height):
                         img = img[
                             crop_y : crop_y + crop_height, crop_x : crop_x + crop_width
                         ]
                     else:
-                        h = self.height
+                        # default: bottom third of frame
                         img = img[2 * h // 3 :, :]
 
-                # brightness mask
+                # Apply brightness mask
                 if brightness_threshold:
                     mask = cv2.inRange(img, (brightness_threshold,) * 3, (255,) * 3)
                     img = cv2.bitwise_and(img, img, mask=mask)
 
-                # similarity filter
+                # Similarity filter
                 if similar_image_threshold:
                     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                     if prev_gray is not None:
@@ -146,7 +169,7 @@ class Video:
                             continue
                     prev_gray = gray
 
-                # OCR
+                # Perform OCR
                 pf = PredictedFrames(frame_ct, self.ocr.ocr(img), conf_pct)
                 pf.timestamp_ms = pts_ms
                 self.pred_frames.append(pf)
@@ -204,7 +227,7 @@ class Video:
             f"{last_txt}\n"
         )
 
-        return "".join(srt_entries)
+        return "\n".join(srt_entries)
 
     @staticmethod
     def _fmt(ms: float) -> str:

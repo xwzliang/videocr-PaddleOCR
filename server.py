@@ -5,6 +5,7 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from videocr import get_subtitles
+from typing import Optional
 
 # --- ensure logs directory exists ---
 os.makedirs("logs", exist_ok=True)
@@ -48,6 +49,9 @@ class SubtitleRequest(BaseModel):
     similar_image_threshold: int = 1000
     similar_pixel_threshold: int = 25
     frames_to_skip: int = 1
+    percent_crop_left: float = None
+    percent_crop_right: float = None
+    percent_keep_bottom: float = None
 
 
 @app.post("/subtitles")
@@ -67,6 +71,9 @@ async def subtitles(req: SubtitleRequest):
             similar_image_threshold=req.similar_image_threshold,
             similar_pixel_threshold=req.similar_pixel_threshold,
             frames_to_skip=req.frames_to_skip,
+            percent_crop_left=req.percent_crop_left,
+            percent_crop_right=req.percent_crop_right,
+            percent_keep_bottom=req.percent_keep_bottom,
         )
         outputs_dir = os.path.join(".", "outputs")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
