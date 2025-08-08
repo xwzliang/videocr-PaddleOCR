@@ -38,6 +38,7 @@ dependencies = [
   "packaging>=20.0",
   "fastapi",
   "uvicorn",
+  "av",
 ]
 
 [project.urls]

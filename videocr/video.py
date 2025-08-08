@@ -1,9 +1,11 @@
 from __future__ import annotations
 from typing import List
 import cv2
+import av
 import numpy as np
 import os
-
+from typing import Optional
+from thefuzz import fuzz
 from . import utils
 from .models import PredictedFrames, PredictedSubtitle
 from .opencv_adapter import Capture
@@ -11,53 +13,62 @@ from paddleocr import PaddleOCR
 
 
 class Video:
-    path: str
-    lang: str
-    use_fullframe: bool
-    det_model_dir: str
-    rec_model_dir: str
-    num_frames: int
-    fps: float
-    height: int
-    ocr: PaddleOCR
-    pred_frames: List[PredictedFrames]
-    pred_subs: List[PredictedSubtitle]
-
-    def __init__(self, path: str, det_model_dir: str, rec_model_dir: str):
+    def __init__(
+        self,
+        path: str,
+        det_model_dir: str,
+        rec_model_dir: str,
+    ):
         self.path = path
         self.det_model_dir = det_model_dir
         self.rec_model_dir = rec_model_dir
-        with Capture(path) as v:
-            self.num_frames = int(v.get(cv2.CAP_PROP_FRAME_COUNT))
-            self.fps = v.get(cv2.CAP_PROP_FPS)
-            self.height = int(v.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        # open with PyAV
+        self.container = av.open(path)
+        self.stream = self.container.streams.video[0]
+        self.stream.thread_type = "AUTO"
+
+        # grab one frame to get height (for default crop)
+        first = next(self.container.decode(video=0))
+        self.height = first.height
+
+        # rewind
+        self.container.seek(0, any_frame=False, stream=self.stream)
+
+        self.pred_frames: List[PredictedFrames] = []
+
+    def _timecode_to_ms(self, tc: str) -> int:
+        parts = list(map(float, tc.split(":")))
+        if len(parts) == 3:
+            h, m, s = parts
+        elif len(parts) == 2:
+            h = 0
+            m, s = parts
+        else:
+            raise ValueError(f"Bad timecode '{tc}'")
+        return int((h * 3600 + m * 60 + s) * 1000)
 
     def run_ocr(
         self,
         use_gpu: bool,
         lang: str,
-        time_start: str,
-        time_end: str,
+        time_start: Optional[str],
+        time_end: Optional[str],
         conf_threshold: int,
         use_fullframe: bool,
         brightness_threshold: int,
         similar_image_threshold: int,
         similar_pixel_threshold: int,
         frames_to_skip: int,
-        crop_x: int,
-        crop_y: int,
-        crop_width: int,
-        crop_height: int,
+        crop_x: Optional[int],
+        crop_y: Optional[int],
+        crop_width: Optional[int],
+        crop_height: Optional[int],
     ) -> None:
-        conf_threshold_percent = float(conf_threshold / 100)
-        self.lang = lang
-        self.use_fullframe = use_fullframe
-        self.pred_frames = []
-
-        # Fix for PaddleOCR versions greater or equal than 3.0.3
+        # init OCR
         if utils.needs_conversion():
-            ocr = PaddleOCR(
-                lang=self.lang,
+            self.ocr = PaddleOCR(
+                lang=lang,
                 text_recognition_model_dir=self.rec_model_dir,
                 text_detection_model_dir=self.det_model_dir,
                 text_detection_model_name=utils.get_model_name_from_dir(
@@ -72,124 +83,133 @@ class Video:
                 device="gpu" if use_gpu else "cpu",
             )
         else:
-            ocr = PaddleOCR(
-                lang=self.lang,
+            self.ocr = PaddleOCR(
+                lang=lang,
                 rec_model_dir=self.rec_model_dir,
                 det_model_dir=self.det_model_dir,
                 use_gpu=use_gpu,
             )
 
-        ocr_start = utils.get_frame_index(time_start, self.fps) if time_start else 0
-        ocr_end = (
-            utils.get_frame_index(time_end, self.fps) if time_end else self.num_frames
-        )
+        start_ms = self._timecode_to_ms(time_start) if time_start else 0
+        end_ms = self._timecode_to_ms(time_end) if time_end else None
+        conf_pct = conf_threshold / 100.0
 
-        if ocr_end < ocr_start:
-            raise ValueError("time_start is later than time_end")
-        num_ocr_frames = ocr_end - ocr_start
+        # seek by PTS
+        if start_ms:
+            ts = int((start_ms / 1000) / float(self.stream.time_base))
+            self.container.seek(ts, any_frame=False, stream=self.stream)
 
-        crop_x_end = None
-        crop_y_end = None
-        if crop_x is not None and crop_y is not None and crop_width and crop_height:
-            crop_x_end = crop_x + crop_width
-            crop_y_end = crop_y + crop_height
+        prev_gray = None
+        skip_mod = frames_to_skip + 1
+        frame_ct = 0
+        self.pred_frames.clear()
 
-        # get frames from ocr_start to ocr_end
-        with Capture(self.path) as v:
-            v.set(cv2.CAP_PROP_POS_FRAMES, ocr_start)
-            prev_grey = None
-            predicted_frames = None
-            modulo = frames_to_skip + 1
-            for i in range(num_ocr_frames):
-                if i % modulo == 0:
-                    frame = v.read()[1]
-                    if frame is None:
-                        continue
-                    if not self.use_fullframe:
-                        if crop_x_end and crop_y_end:
-                            frame = frame[crop_y:crop_y_end, crop_x:crop_x_end]
-                        else:
-                            # only use bottom third of the frame by default
-                            frame = frame[2 * self.height // 3 :, :]
+        for packet in self.container.demux(self.stream):
+            for frame in packet.decode():
+                pts_ms = float(frame.pts * self.stream.time_base) * 1000
+                if pts_ms < start_ms:
+                    continue
+                if end_ms is not None and pts_ms > end_ms:
+                    return
 
-                    if brightness_threshold:
-                        frame = cv2.bitwise_and(
-                            frame,
-                            frame,
-                            mask=cv2.inRange(
-                                frame,
-                                (
-                                    brightness_threshold,
-                                    brightness_threshold,
-                                    brightness_threshold,
-                                ),
-                                (255, 255, 255),
-                            ),
+                frame_ct += 1
+                if frame_ct % skip_mod != 0:
+                    continue
+
+                img = frame.to_ndarray(format="bgr24")
+
+                # crop
+                if not use_fullframe:
+                    if None not in (crop_x, crop_y, crop_width, crop_height):
+                        img = img[
+                            crop_y : crop_y + crop_height, crop_x : crop_x + crop_width
+                        ]
+                    else:
+                        h = self.height
+                        img = img[2 * h // 3 :, :]
+
+                # brightness mask
+                if brightness_threshold:
+                    mask = cv2.inRange(img, (brightness_threshold,) * 3, (255,) * 3)
+                    img = cv2.bitwise_and(img, img, mask=mask)
+
+                # similarity filter
+                if similar_image_threshold:
+                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    if prev_gray is not None:
+                        diff = cv2.absdiff(prev_gray, gray)
+                        _, diff = cv2.threshold(
+                            diff, similar_pixel_threshold, 255, cv2.THRESH_BINARY
                         )
+                        if np.count_nonzero(diff) < similar_image_threshold:
+                            prev_gray = gray
+                            continue
+                    prev_gray = gray
 
-                    if similar_image_threshold:
-                        grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                        if prev_grey is not None:
-                            _, absdiff = cv2.threshold(
-                                cv2.absdiff(prev_grey, grey),
-                                similar_pixel_threshold,
-                                255,
-                                cv2.THRESH_BINARY,
-                            )
-                            if np.count_nonzero(absdiff) < similar_image_threshold:
-                                predicted_frames.end_index = i + ocr_start
-                                prev_grey = grey
-                                continue
+                # OCR
+                pf = PredictedFrames(frame_ct, self.ocr.ocr(img), conf_pct)
+                pf.timestamp_ms = pts_ms
+                self.pred_frames.append(pf)
 
-                        prev_grey = grey
+    def get_subtitles(self, sim_threshold: int = 80) -> str:
+        """
+        Build SRT entries by:
+         1) Extracting text from PredictedText objects.
+         2) Merging hits that are similar and close in time.
+        """
+        # 1) collect (timestamp, text) hits
+        hits: List[tuple[float, str]] = []
+        for pf in self.pred_frames:
+            if not getattr(pf, "lines", None):
+                continue
 
-                    predicted_frames = PredictedFrames(
-                        i + ocr_start, ocr.ocr(frame), conf_threshold_percent
-                    )
-                    self.pred_frames.append(predicted_frames)
-                else:
-                    v.read()
+            # extract each PredictedText.text
+            pieces = []
+            for line in pf.lines:
+                for pt in line:
+                    # PredictedText has attribute .text
+                    pieces.append(pt.text if hasattr(pt, "text") else str(pt))
+            text = " ".join(pieces)
+            hits.append((pf.timestamp_ms, text))
 
-    def get_subtitles(self, sim_threshold: int) -> str:
-        self._generate_subtitles(sim_threshold)
-        return "".join(
-            "{}\n{} --> {}\n{}\n\n".format(
-                i,
-                utils.get_srt_timestamp(sub.index_start, self.fps),
-                utils.get_srt_timestamp(sub.index_end + 1, self.fps),
-                sub.text,
-            )
-            for i, sub in enumerate(self.pred_subs, start=1)
+        if not hits:
+            return ""
+
+        # 2) fuzzy-merge into SRT cues
+        srt_entries = []
+        idx = 1
+        start_ts, last_ts, last_txt = hits[0][0], hits[0][0], hits[0][1]
+        merge_gap = 3000.0  # 3 seconds max gap
+
+        for ts, txt in hits[1:]:
+            gap = ts - last_ts
+            sim = fuzz.ratio(last_txt, txt)
+            if sim >= sim_threshold and gap <= merge_gap:
+                # extend current cue
+                last_ts = ts
+            else:
+                # close out previous cue
+                srt_entries.append(
+                    f"{idx}\n"
+                    f"{self._fmt(start_ts)} --> {self._fmt(last_ts+1)}\n"
+                    f"{last_txt}\n"
+                )
+                idx += 1
+                start_ts, last_ts, last_txt = ts, ts, txt
+
+        # final cue
+        srt_entries.append(
+            f"{idx}\n"
+            f"{self._fmt(start_ts)} --> {self._fmt(last_ts+1)}\n"
+            f"{last_txt}\n"
         )
 
-    def _generate_subtitles(self, sim_threshold: int) -> None:
-        self.pred_subs = []
+        return "".join(srt_entries)
 
-        if self.pred_frames is None:
-            raise AttributeError(
-                "Please call self.run_ocr() first to perform ocr on frames"
-            )
-
-        max_frame_merge_diff = int(0.09 * self.fps)
-        for frame in self.pred_frames:
-            self._append_sub(
-                PredictedSubtitle([frame], sim_threshold), max_frame_merge_diff
-            )
-        self.pred_subs = [sub for sub in self.pred_subs if len(sub.frames[0].lines) > 0]
-
-    def _append_sub(self, sub: PredictedSubtitle, max_frame_merge_diff: int) -> None:
-        if len(sub.frames) == 0:
-            return
-
-        # merge new sub to the last subs if they are not empty, similar and within 0.09 seconds apart
-        if self.pred_subs:
-            last_sub = self.pred_subs[-1]
-            if (
-                len(last_sub.frames[0].lines) > 0
-                and sub.index_start - last_sub.index_end <= max_frame_merge_diff
-                and last_sub.is_similar_to(sub)
-            ):
-                del self.pred_subs[-1]
-                sub = PredictedSubtitle(last_sub.frames + sub.frames, sub.sim_threshold)
-
-        self.pred_subs.append(sub)
+    @staticmethod
+    def _fmt(ms: float) -> str:
+        total = int(ms)
+        sec, msec = divmod(total, 1000)
+        minute, sec = divmod(sec, 60)
+        hour, minute = divmod(minute, 60)
+        return f"{hour:02d}:{minute:02d}:{sec:02d},{msec:03d}"
