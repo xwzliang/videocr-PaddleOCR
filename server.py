@@ -1,5 +1,6 @@
 import os
 import logging
+import threading
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
@@ -48,7 +49,7 @@ class SubtitleRequest(BaseModel):
     brightness_threshold: int = 210
     similar_image_threshold: int = 1000
     similar_pixel_threshold: int = 25
-    frames_to_skip: int = 1
+    frames_to_skip: int = 0
     percent_crop_left: float = None
     percent_crop_right: float = None
     percent_keep_bottom: float = None
@@ -85,6 +86,19 @@ async def subtitles(req: SubtitleRequest):
     except Exception as e:
         logging.exception("Error in get_subtitles")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/self-shutdown")
+async def self_shutdown():
+    def exit_later():
+        # short delay to ensure response is sent
+        import time
+
+        time.sleep(0.1)
+        os._exit(0)  # immediate hard exit
+
+    threading.Thread(target=exit_later, daemon=True).start()
+    return {"status": "shutting down"}
 
 
 if __name__ == "__main__":
