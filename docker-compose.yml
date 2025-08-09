@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   videocr:
     image: xwzliang/videocr_paddle:0.0.3
