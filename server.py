@@ -55,7 +55,7 @@ class SubtitleRequest(BaseModel):
     percent_keep_bottom: float = None
 
 
-@app.post("/subtitles")
+@app.post("/infer_path")
 async def subtitles(req: SubtitleRequest):
     logging.info(f"Request: {req.json()}")
     try:
