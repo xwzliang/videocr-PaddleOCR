@@ -207,6 +207,8 @@ class Video:
         i = 0
         n = len(hits)
 
+        segments = []
+
         while i < n:
             start_ts, txt = hits[i]
             j = i + 1
@@ -237,10 +239,17 @@ class Video:
                 f"{self._fmt(start_ts)} --> {self._fmt(end_ts)}\n"
                 f"{txt}\n\n"
             )
+            segments.append(
+                {
+                    "start": start_ts,
+                    "end": end_ts,
+                    "text": txt,
+                }
+            )
             idx += 1
             i = j
 
-        return "".join(srt)
+        return "".join(srt), segments
 
     @staticmethod
     def _fmt(ms: float) -> str:

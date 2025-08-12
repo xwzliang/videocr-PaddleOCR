@@ -59,7 +59,7 @@ class SubtitleRequest(BaseModel):
 async def subtitles(req: SubtitleRequest):
     logging.info(f"Request: {req.json()}")
     try:
-        subs = get_subtitles(
+        subs, segments = get_subtitles(
             req.file_path,
             lang=req.lang,
             time_start=req.time_start,
@@ -82,7 +82,7 @@ async def subtitles(req: SubtitleRequest):
         with open(output_file_path, "w", encoding="utf-8") as f:
             f.write(subs)
         logging.info("Subtitles generated successfully")
-        return {"subtitles": subs}
+        return {"subtitles": subs, "segments": segments}
     except Exception as e:
         logging.exception("Error in get_subtitles")
         raise HTTPException(status_code=500, detail=str(e))

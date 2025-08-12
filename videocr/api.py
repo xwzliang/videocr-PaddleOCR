@@ -24,7 +24,7 @@ def get_subtitles(
     percent_crop_left: Optional[float] = None,
     percent_crop_right: Optional[float] = None,
     percent_keep_bottom: Optional[float] = None,
-) -> str:
+):
 
     v = Video(video_path, det_model_dir, rec_model_dir)
     v.run_ocr(
@@ -97,5 +97,5 @@ def save_subtitles_to_file(
                 percent_crop_left=percent_crop_left,
                 percent_crop_right=percent_crop_right,
                 percent_keep_bottom=percent_keep_bottom,
-            )
+            )[0]
         )
